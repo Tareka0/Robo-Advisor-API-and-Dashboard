@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Robo-Advisor for Treasury</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --navy:#1A3A5C; --gold:#C8973A; --green:#0F6E56;
+    --red:#993C1D; --amber:#BA7517; --purple:#534AB7;
+    --bg:#F8F9FA; --card:#FFF; --border:#E2E6EA;
+    --text:#1C2B3A; --muted:#6B7A8D;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Segoe UI',Tahoma,sans-serif; background:var(--bg); color:var(--text); direction:rtl; }
+
+  .topbar { background:var(--navy); padding:12px 24px; display:flex; align-items:center; justify-content:space-between; }
+  .topbar-title { color:#fff; font-size:18px; font-weight:600; }
+  .topbar-sub   { color:rgba(255,255,255,0.7); font-size:12px; }
+  .conn-badge   { background:rgba(255,255,255,0.15); color:#fff; font-size:12px; padding:5px 12px; border-radius:20px; }
+
+  .conn-bar { background:#fff3cd; border-bottom:1px solid #ffc107; padding:9px 24px; display:flex; align-items:center; gap:10px; font-size:13px; }
+  .conn-bar input { flex:1; padding:5px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; direction:ltr; }
+  .btn-connect { background:var(--navy); color:#fff; border:none; padding:6px 16px; border-radius:6px; cursor:pointer; font-size:13px; }
+  .btn-mock    { background:#6c757d;     color:#fff; border:none; padding:6px 16px; border-radius:6px; cursor:pointer; font-size:13px; }
+
+  .container { max-width:1100px; margin:0 auto; padding:20px; }
+  .grid-2 { display:grid; grid-template-columns:1fr 1.5fr; gap:16px; }
+  .card   { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:18px; }
+  .sec-title { font-size:13px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:14px; }
+
+  .slider-row { margin-bottom:12px; }
+  .sl-top { display:flex; justify-content:space-between; margin-bottom:4px; }
+  .sl-name { font-size:13px; color:var(--text); }
+  .sl-val  { font-size:13px; font-weight:600; color:var(--navy); }
+
+  .risk-row { display:flex; gap:8px; margin-top:4px; }
+  .risk-btn { flex:1; padding:7px 0; border-radius:8px; border:1px solid var(--border); background:#fff; font-size:13px; cursor:pointer; color:var(--muted); }
+  .risk-btn.act-low  { background:#e8f5e9; color:#1b5e20; border-color:#66bb6a; }
+  .risk-btn.act-mid  { background:#fff8e1; color:#e65100; border-color:#ffa726; }
+  .risk-btn.act-high { background:#fdecea; color:#b71c1c; border-color:#ef5350; }
+
+  .kpi-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+  .kpi { background:var(--bg); border-radius:8px; padding:12px 14px; }
+  .kpi-label { font-size:11px; color:var(--muted); margin-bottom:3px; }
+  .kpi-value { font-size:22px; font-weight:600; color:var(--navy); }
+  .kpi-note  { font-size:11px; color:var(--muted); margin-top:2px; }
+
+  .alloc-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .alloc-name  { font-size:12px; color:var(--text); flex:1; }
+  .bar-wrap    { flex:1; height:8px; background:var(--border); border-radius:4px; overflow:hidden; }
+  .bar-fill    { height:100%; border-radius:4px; transition:width 0.5s ease; }
+  .alloc-pct   { font-size:12px; font-weight:600; color:var(--navy); min-width:40px; text-align:left; }
+
+  .scenario-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:10px; }
+  .sc-card { border-radius:8px; padding:10px; text-align:center; border:1px solid var(--border); }
+  .sc-label { font-size:11px; color:var(--muted); }
+  .sc-val   { font-size:16px; font-weight:600; margin-top:3px; }
+  .sc-card.up   { background:#e8f5e9; }
+  .sc-card.base { background:var(--bg); }
+  .sc-card.down { background:#fdecea; }
+
+  .legend-row { display:flex; gap:14px; font-size:11px; color:var(--muted); margin-top:8px; }
+  .leg-dot { width:10px; height:10px; border-radius:2px; display:inline-block; margin-left:4px; }
+
+  .loading { text-align:center; padding:30px; color:var(--muted); }
+  .spinner { width:28px; height:28px; border:3px solid var(--border); border-top-color:var(--navy); border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 8px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  @media(max-width:768px){ .grid-2{ grid-template-columns:1fr; } .kpi-grid{ grid-template-columns:1fr 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <div class="topbar-title">⚖️ Robo-Advisor for Treasury</div>
+    <div class="topbar-sub">محسّن المحفظة النقدية — Markowitz Optimisation Engine</div>
+  </div>
+  <div class="conn-badge" id="conn-status">⏳ في انتظار الاتصال</div>
+</div>
+
+<!--
+  ╔════════════════════════════════════════════════╗
+  ║  STEP 1: Run robo_advisor.py in Google Colab   ║
+  ║  STEP 2: Copy the ngrok URL printed below      ║
+  ║  STEP 3: Paste it in the input field here      ║
+  ╚════════════════════════════════════════════════╝
+-->
+<div class="conn-bar">
+  <span>🔗 رابط API:</span>
+  <input id="api-url-input" type="text" placeholder="https://xxxx.ngrok-free.app" value="http://localhost:5001"/>
+  <button class="btn-connect" onclick="connectAPI()">اتصال</button>
+  <button class="btn-mock"    onclick="useMockData()">بيانات تجريبية</button>
+</div>
+
+<div class="container">
+  <div class="grid-2">
+    <!-- LEFT: Controls -->
+    <div>
+      <div class="card">
+        <div class="sec-title">إعدادات التخصيص</div>
+
+        <div class="slider-row">
+          <div class="sl-top"><span class="sl-name">الفائض النقدي (مليون ج.م)</span><span class="sl-val" id="disp-surplus">50M</span></div>
+          <input type="range" id="sl-surplus" min="5" max="300" value="50" step="5" style="width:100%;" oninput="onInput()"/>
+        </div>
+        <div class="slider-row">
+          <div class="sl-top"><span class="sl-name">أفق الاستثمار (أشهر)</span><span class="sl-val" id="disp-horizon">3 أشهر</span></div>
+          <input type="range" id="sl-horizon" min="1" max="12" value="3" step="1" style="width:100%;" oninput="onInput()"/>
+        </div>
+        <div class="slider-row">
+          <div class="sl-top"><span class="sl-name">احتياطي الطوارئ</span><span class="sl-val" id="disp-emerg">15%</span></div>
+          <input type="range" id="sl-emerg" min="5" max="40" value="15" step="5" style="width:100%;" oninput="onInput()"/>
+        </div>
+        <div class="slider-row">
+          <div class="sl-top"><span class="sl-name">معدل CBE الحالي</span><span class="sl-val" id="disp-rate">27%</span></div>
+          <input type="range" id="sl-rate" min="15" max="35" value="27" step="1" style="width:100%;" oninput="onInput()"/>
+        </div>
+        <div style="margin-top:10px;">
+          <div class="sl-name" style="margin-bottom:8px;">مستوى المخاطرة</div>
+          <div class="risk-row">
+            <button class="risk-btn act-low" id="rb-low"  onclick="setRisk('low',  this)">منخفضة</button>
+            <button class="risk-btn"         id="rb-mid"  onclick="setRisk('mid',  this)">متوسطة</button>
+            <button class="risk-btn"         id="rb-high" onclick="setRisk('high', this)">مرتفعة</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <div class="sec-title">محاكاة تغير أسعار الفائدة</div>
+        <div style="font-size:12px; color:var(--muted); margin-bottom:6px;">صدمة ±2% على معدل CBE</div>
+        <div class="scenario-grid">
+          <div class="sc-card down"><div class="sc-label">صدمة −2%</div><div class="sc-val" id="sc-down" style="color:#b71c1c;">—</div></div>
+          <div class="sc-card base"><div class="sc-label">الحالي</div>  <div class="sc-val" id="sc-base" style="color:var(--text);">—</div></div>
+          <div class="sc-card up">  <div class="sc-label">صدمة +2%</div><div class="sc-val" id="sc-up"   style="color:#1b5e20;">—</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Results -->
+    <div>
+      <div class="card" style="margin-bottom:14px;">
+        <div class="sec-title">التوزيع الأمثل للمحفظة</div>
+        <div id="alloc-container"><div class="loading"><div class="spinner"></div></div></div>
+        <div style="height:1px; background:var(--border); margin:12px 0;"></div>
+        <div class="kpi-grid">
+          <div class="kpi"><div class="kpi-label">العائد السنوي المتوقع</div><div class="kpi-value" id="kpi-ret">—</div><div class="kpi-note">معدل مرجّح محسوب</div></div>
+          <div class="kpi"><div class="kpi-label">العائد النقدي (خلال المدة)</div><div class="kpi-value" id="kpi-abs">—</div><div class="kpi-note">مليون ج.م</div></div>
+          <div class="kpi"><div class="kpi-label">Sharpe Ratio</div><div class="kpi-value" id="kpi-sharpe">—</div><div class="kpi-note">عائد / مخاطرة</div></div>
+          <div class="kpi"><div class="kpi-label">الاحتياطي المحمي</div><div class="kpi-value" id="kpi-safe">—</div><div class="kpi-note">متاح فوراً</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="sec-title">منحنى الكفاءة (Efficient Frontier)</div>
+        <div style="position:relative; height:160px;">
+          <canvas id="effChart"></canvas>
+        </div>
+        <div class="legend-row">
+          <span><span class="leg-dot" style="background:#534AB7;"></span>منحنى الكفاءة</span>
+          <span><span class="leg-dot" style="border-radius:50%; background:#C8973A;"></span>محفظتك المختارة</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let API_BASE = 'http://localhost:5001'
+let currentRisk = 'low'
+let effChartInst = null
+let debounceTimer = null
+
+const ALLOC_COLORS = ['#1A3A5C','#C8973A','#0F6E56','#534AB7','#BA7517','#993C1D']
+
+// ── Connection ──
+async function connectAPI() {
+  API_BASE = document.getElementById('api-url-input').value.trim().replace(/\/$/, '')
+  document.getElementById('conn-status').textContent = '⏳ جاري الاتصال...'
+  try {
+    const res = await fetch(`${API_BASE}/instruments`)
+    if (!res.ok) throw new Error()
+    document.getElementById('conn-status').textContent = '✅ متصل'
+    fetchOptimise()
+  } catch {
+    document.getElementById('conn-status').textContent = '❌ فشل الاتصال'
+  }
+}
+
+// ── Fetch from Python API ──
+async function fetchOptimise() {
+  const surplus  = document.getElementById('sl-surplus').value
+  const horizon  = document.getElementById('sl-horizon').value
+  const emerg    = document.getElementById('sl-emerg').value / 100
+  const rate     = document.getElementById('sl-rate').value
+
+  try {
+    const url = `${API_BASE}/optimise?surplus=${surplus}&horizon=${horizon}&emergency=${emerg}&risk=${currentRisk}&rate=${rate}`
+    const res  = await fetch(url)
+    const data = await res.json()
+    renderResults(data)
+  } catch(e) { console.error('API error:', e) }
+}
+
+// ── Render Results ──
+function renderResults(data) {
+  // KPIs
+  document.getElementById('kpi-ret').textContent    = data.portfolio_return + '%'
+  document.getElementById('kpi-abs').textContent    = data.abs_return_m + 'M'
+  document.getElementById('kpi-sharpe').textContent = data.sharpe_ratio
+  document.getElementById('kpi-safe').textContent   = data.emergency_amount_m + 'M'
+
+  // Scenarios
+  const s = data.scenarios
+  document.getElementById('sc-down').textContent = s.shock_minus_2 + '%'
+  document.getElementById('sc-base').textContent = s.base + '%'
+  document.getElementById('sc-up').textContent   = s.shock_plus_2 + '%'
+
+  // Allocations
+  const container = document.getElementById('alloc-container')
+  container.innerHTML = data.allocations.map((a, i) => `
+    <div class="alloc-row">
+      <span class="alloc-name">${a.name}</span>
+      <div class="bar-wrap"><div class="bar-fill" style="width:${a.weight_pct}%; background:${ALLOC_COLORS[i % ALLOC_COLORS.length]};"></div></div>
+      <span class="alloc-pct">${a.weight_pct}%</span>
+    </div>
+  `).join('')
+
+  // Efficient frontier
+  renderEffChart(data.efficient_frontier, data.portfolio_return, data.portfolio_std)
+}
+
+function renderEffChart(frontier, selRet, selStd) {
+  const ctx = document.getElementById('effChart').getContext('2d')
+  if (effChartInst) effChartInst.destroy()
+
+  effChartInst = new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: [
+        {
+          label: 'منحنى الكفاءة',
+          data: frontier.map(p => ({ x: p.risk, y: p.return })),
+          showLine: true,
+          borderColor: '#534AB7',
+          backgroundColor: 'transparent',
+          pointRadius: 3,
+          borderWidth: 2
+        },
+        {
+          label: 'محفظتك',
+          data: [{ x: selStd, y: selRet }],
+          borderColor: '#C8973A',
+          backgroundColor: '#C8973A',
+          pointRadius: 8
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { title: { display: true, text: 'المخاطرة (std%)', font: { size: 10 } }, ticks: { font: { size: 10 } } },
+        y: { title: { display: true, text: 'العائد%', font: { size: 10 } }, ticks: { font: { size: 10 }, callback: v => v + '%' } }
+      }
+    }
+  })
+}
+
+// ── UI Controls ──
+function setRisk(r, btn) {
+  currentRisk = r
+  document.querySelectorAll('.risk-btn').forEach(b => b.className = 'risk-btn')
+  btn.classList.add('act-' + r)
+  onInput()
+}
+
+function onInput() {
+  document.getElementById('disp-surplus').textContent = document.getElementById('sl-surplus').value + 'M'
+  document.getElementById('disp-horizon').textContent = document.getElementById('sl-horizon').value + ' أشهر'
+  document.getElementById('disp-emerg').textContent   = document.getElementById('sl-emerg').value  + '%'
+  document.getElementById('disp-rate').textContent    = document.getElementById('sl-rate').value   + '%'
+  clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(() => {
+    if (API_BASE !== 'http://localhost:5001') fetchOptimise()
+    else useMockData()
+  }, 400)
+}
+
+// ── Mock Data (works without Colab) ──
+function useMockData() {
+  document.getElementById('conn-status').textContent = '📊 بيانات تجريبية'
+  const surplus  = +document.getElementById('sl-surplus').value
+  const emerg    = +document.getElementById('sl-emerg').value / 100
+  const investable = 1 - emerg
+
+  const riskMap = {
+    low:  { allocs: [['أذون خزانة 91 يوم', 0.45], ['صندوق الأهلي الأول', 0.30], ['شهادة 3 أشهر', 0.15]], ret: 25.1, sharpe: 1.82 },
+    mid:  { allocs: [['أذون خزانة 91 يوم', 0.30], ['صندوق الأهلي الأول', 0.25], ['صندوق الأهلي الثالث', 0.25], ['شهادة سنة', 0.10]], ret: 24.3, sharpe: 1.45 },
+    high: { allocs: [['شهادة سنة', 0.40], ['أذون خزانة 182 يوم', 0.30], ['صندوق الأهلي الثالث', 0.20]], ret: 23.8, sharpe: 1.08 },
+  }
+  const profile = riskMap[currentRisk]
+  const horizon = +document.getElementById('sl-horizon').value
+  const absRet  = +(surplus * investable * (profile.ret/100) * (horizon/12)).toFixed(2)
+
+  const data = {
+    portfolio_return: profile.ret,
+    abs_return_m: absRet,
+    sharpe_ratio: profile.sharpe,
+    emergency_amount_m: +(surplus * emerg).toFixed(2),
+    scenarios: { shock_minus_2: (profile.ret - 2).toFixed(1), base: profile.ret.toFixed(1), shock_plus_2: (profile.ret + 2).toFixed(1) },
+    allocations: profile.allocs.map(([name, w]) => ({ name, weight_pct: +(w * investable * 100).toFixed(1) })),
+    efficient_frontier: [0.4,0.6,0.8,1.0,1.2,1.4,1.6,1.8,2.0].map((r,i) => ({ risk: r, return: 18 + i * 1.5 })),
+    portfolio_std: 1.2
+  }
+  renderResults(data)
+}
+
+window.onload = () => { onInput(); connectAPI(); }
+</script>
+</body>
+</html>
